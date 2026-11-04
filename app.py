@@ -16,15 +16,17 @@ with st.spinner("Loading course materials and vector index..."):
     engine = get_engine()
 
 # Question Input
-query = st.text_input("Ask a question about the course:", placeholder="e.g. What is SQL Injection and how can it be prevented?")
+col_q, col_k = st.columns([4, 1])
+with col_q:
+    query = st.text_input("Ask a question about the course:", placeholder="e.g. What are the types of SQL injection?")
+with col_k:
+    top_k = st.number_input("Top Slides", min_value=3, max_value=8, value=5)
 
-col1, col2 = st.columns([1, 5])
-with col1:
-    submit = st.button("Submit", type="primary")
+submit = st.button("Submit", type="primary")
 
 if submit and query.strip():
     with st.spinner("Searching lecture slides and generating answer..."):
-        result = engine.answer_question(query.strip(), top_k=3)
+        result = engine.answer_question(query.strip(), top_k=top_k)
 
     st.markdown("### Answer")
     st.write(result["answer"])

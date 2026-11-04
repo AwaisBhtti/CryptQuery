@@ -13,7 +13,7 @@ load_dotenv()
 INDEX_FILE = Path("vector_store/faiss_index.bin")
 METADATA_FILE = Path("vector_store/chunks_metadata.json")
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
-LLM_MODEL_NAME = "openai/gpt-oss-120b"  # Fast, highly capable LLM on Groq
+LLM_MODEL_NAME = "openai/gpt-oss-20b"  # Most lightweight, token-efficient model on Groq
 
 class RAGEngine:
     def __init__(self, index_path=INDEX_FILE, metadata_path=METADATA_FILE):
@@ -36,7 +36,7 @@ class RAGEngine:
         self.groq_client = Groq(api_key=api_key) if api_key else None
         print("RAG Engine ready.")
 
-    def retrieve(self, query: str, top_k: int = 3) -> list[dict]:
+    def retrieve(self, query: str, top_k: int = 5) -> list[dict]:
         """Retrieve the top_k most relevant slide chunks."""
         query_vec = self.embedder.encode([query], normalize_embeddings=True)
         query_vec = np.array(query_vec, dtype=np.float32)
@@ -81,7 +81,7 @@ USER QUESTION:
 ANSWER:"""
         return prompt
 
-    def answer_question(self, query: str, top_k: int = 3) -> dict:
+    def answer_question(self, query: str, top_k: int = 5) -> dict:
         """End-to-end pipeline: Retrieve -> Format -> Call LLM."""
         retrieved_chunks = self.retrieve(query, top_k=top_k)
         
