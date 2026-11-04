@@ -13,7 +13,7 @@ load_dotenv()
 INDEX_FILE = Path("vector_store/faiss_index.bin")
 METADATA_FILE = Path("vector_store/chunks_metadata.json")
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
-LLM_MODEL_NAME = "llama-3.3-70b-versatile"  # Fast, highly accurate, and free on Groq
+LLM_MODEL_NAME = "openai/gpt-oss-120b"  # Fast, highly capable LLM on Groq
 
 class RAGEngine:
     def __init__(self, index_path=INDEX_FILE, metadata_path=METADATA_FILE):
@@ -114,6 +114,10 @@ ANSWER:"""
 
 if __name__ == "__main__":
     import sys
+    # Ensure Windows console supports UTF-8 characters like dashes and bullets
+    if sys.platform == "win32":
+        sys.stdout.reconfigure(encoding="utf-8")
+        
     engine = RAGEngine()
     
     test_question = "What is SQL Injection and how can it be prevented?"
