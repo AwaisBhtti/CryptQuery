@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Environment variables & API keys (Groq, etc.)
+.env
+.env.local
+
+# Vector store indexes & local cache (can be regenerated or large)
+vector_store/
+faiss_index/
+*.index
+
+# HuggingFace & Torch cache
+.cache/
+hf_cache/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
