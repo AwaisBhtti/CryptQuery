@@ -13,11 +13,6 @@ ENV/
 .env
 .env.local
 
-# Vector store indexes & local cache (can be regenerated or large)
-vector_store/
-faiss_index/
-*.index
-
 # HuggingFace & Torch cache
 .cache/
 hf_cache/
