@@ -55,6 +55,39 @@ class RAGEngine:
             })
         return results
 
+    def condense_query(self, query: str, history: list[dict]) -> str:
+        """
+        If there is prior chat history, ask the LLM to rewrite the follow-up
+        into a fully self-contained search query. Otherwise return as-is.
+        history format: [{"role": "user"|"assistant", "content": str}, ...]
+        """
+        if not history or not self.groq_client:
+            return query
+
+        history_str = ""
+        for msg in history:
+            role = "User" if msg["role"] == "user" else "Assistant"
+            history_str += f"{role}: {msg['content']}\n"
+
+        condense_prompt = f"""Given the following conversation history and a follow-up question, rewrite the follow-up into a fully self-contained search query that captures the complete intent without relying on prior context. Output ONLY the rewritten query, nothing else.
+
+Conversation History:
+{history_str}
+Follow-up Question: {query}
+Standalone Query:"""
+
+        try:
+            response = self.groq_client.chat.completions.create(
+                model=LLM_MODEL_NAME,
+                messages=[{"role": "user", "content": condense_prompt}],
+                temperature=0.0,
+                max_tokens=80,
+            )
+            condensed = response.choices[0].message.content.strip()
+            return condensed if condensed else query
+        except Exception:
+            return query
+
     def build_prompt(self, query: str, context_chunks: list[dict]) -> str:
         """Construct the grounded prompt with slide context."""
         context_str = ""
@@ -110,6 +143,76 @@ ANSWER:"""
         return {
             "answer": answer_text,
             "sources": retrieved_chunks
+        }
+
+    def answer_with_history(self, query: str, history: list[dict], top_k: int = 5) -> dict:
+        """
+        Multi-turn pipeline:
+          1. Condense follow-up query using history.
+          2. Retrieve relevant slide chunks using the condensed query.
+          3. Build the full messages list (system + history + grounded prompt).
+          4. Call LLM and return answer + sources.
+        """
+        # Step 1: Condense
+        search_query = self.condense_query(query, history)
+
+        # Step 2: Retrieve
+        retrieved_chunks = self.retrieve(search_query, top_k=top_k)
+
+        if not self.groq_client:
+            return {
+                "answer": "Error: GROQ_API_KEY is not set. Please create a .env file with your GROQ_API_KEY.",
+                "sources": retrieved_chunks,
+            }
+
+        # Step 3: Build messages
+        system_msg = {
+            "role": "system",
+            "content": (
+                "You are CryptQuery, a precise academic Q&A assistant for the CS3002 "
+                "Information Security course. Answer based STRICTLY on the provided "
+                "slide context. Cite [Source: X.pdf, Slide N] for every major point. "
+                "If the topic is not covered in the slides, say so explicitly: "
+                "'Based on the provided CS3002 lecture slides, this topic is not covered in the course material.'"
+            ),
+        }
+
+        # Inject slide context into the latest user message
+        context_str = ""
+        for i, chunk in enumerate(retrieved_chunks, start=1):
+            context_str += (
+                f"\n--- Context Document {i} [Source: {chunk['source']}, "
+                f"Slide: {chunk['slide_number']}] ---\n{chunk['text']}\n"
+            )
+
+        grounded_user_msg = {
+            "role": "user",
+            "content": (
+                f"SLIDE CONTEXT:\n{context_str}\n\nUSER QUESTION: {query}\n\nANSWER:"
+            ),
+        }
+
+        # Last 3 turns of history (each turn = 1 user msg + 1 assistant msg = 2 entries)
+        trimmed_history = history[-6:] if history else []
+
+        messages = [system_msg] + trimmed_history + [grounded_user_msg]
+
+        # Step 4: Call LLM
+        try:
+            response = self.groq_client.chat.completions.create(
+                model=LLM_MODEL_NAME,
+                messages=messages,
+                temperature=0.2,
+                max_tokens=600,
+            )
+            answer_text = response.choices[0].message.content.strip()
+        except Exception as e:
+            answer_text = f"Error calling Groq API: {e}"
+
+        return {
+            "answer": answer_text,
+            "sources": retrieved_chunks,
+            "search_query": search_query
         }
 
 if __name__ == "__main__":
