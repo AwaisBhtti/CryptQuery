@@ -1,5 +1,18 @@
 import streamlit as st
 from rag_engine import RAGEngine
+import pymupdf
+from pathlib import Path
+
+SLIDES_DIR = Path("IS Slides")
+
+@st.cache_data
+def render_slide_image(source_filename: str, slide_number: int) -> bytes:
+    doc = pymupdf.open(SLIDES_DIR / source_filename)
+    page = doc[slide_number - 1]
+    pix = page.get_pixmap(matrix=pymupdf.Matrix(1.5, 1.5))
+    img_bytes = pix.tobytes("png")
+    doc.close()
+    return img_bytes
 
 st.set_page_config(page_title="CryptQuery - CS3002 Assistant", page_icon="🔒")
 
@@ -35,5 +48,11 @@ if submit and query.strip():
     st.markdown("### Retrieved Slide Sources")
     for s in result["sources"]:
         with st.expander(f"📄 {s['source']} — Slide {s['slide_number']} (Score: {s['score']:.3f})"):
+            try:
+                img = render_slide_image(s["source"], s["slide_number"])
+                st.image(img, use_column_width=True)
+            except Exception:
+                st.warning(f"Could not render slide image for {s['source']}.")
+            st.markdown("**Extracted Text:**")
             st.text(s["text"])
 
