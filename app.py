@@ -50,7 +50,7 @@ if submit and query.strip():
         with st.expander(f"📄 {s['source']} — Slide {s['slide_number']} (Score: {s['score']:.3f})"):
             try:
                 img = render_slide_image(s["source"], s["slide_number"])
-                st.image(img, use_column_width=True)
+                st.image(img, use_container_width=True)
             except Exception:
                 st.warning(f"Could not render slide image for {s['source']}.")
             st.markdown("**Extracted Text:**")
