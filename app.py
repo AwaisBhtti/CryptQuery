@@ -1,6 +1,7 @@
 import streamlit as st
 from rag_engine import RAGEngine, SIMILARITY_THRESHOLD
 import pymupdf
+from datetime import datetime
 from pathlib import Path
 
 SLIDES_DIR = Path("IS Slides")
@@ -30,6 +31,27 @@ def render_slide_image(source_filename: str, slide_number: int) -> bytes:
     doc.close()
     return img_bytes
 
+def chat_to_markdown(messages, sources, oos_flags) -> str:
+    """Export the conversation as study notes: question, answer and the slides it came from."""
+    lines = ["# CryptQuery: CS3002 chat export", f"_Exported {datetime.now():%Y-%m-%d %H:%M}_", ""]
+    q_no, turn = 0, 0
+    for msg in messages:
+        if msg["role"] == "user":
+            q_no += 1
+            lines += [f"## Q{q_no}. {msg['content']}", ""]
+        else:
+            is_oos = turn < len(oos_flags) and oos_flags[turn]
+            lines += [msg["content"], ""]
+            srcs = sources[turn] if turn < len(sources) else []
+            if is_oos:
+                lines += ["_Marked as out of syllabus (no relevant slides found)._", ""]
+            elif srcs:
+                refs = ", ".join(f"{x['source']} (slide {x['slide_number']})" for x in srcs)
+                lines += [f"**Sources:** {refs}", ""]
+            turn += 1
+    return "\n".join(lines)
+
+
 # ── Init ──────────────────────────────────────────────────────────────────────
 with st.spinner("Loading course materials and vector index..."):
     engine = get_engine()
@@ -52,6 +74,7 @@ with st.sidebar:
              "treated as out-of-syllabus and no answer is generated.",
     )
     st.markdown("---")
+    export_slot = st.empty()   # filled at the end of the script (includes the newest answer)
     if st.button("🗑️ Clear Chat", use_container_width=True):
         st.session_state.messages = []
         st.session_state.sources = []
@@ -166,3 +189,13 @@ if query and query.strip():
     st.session_state.messages.append({"role": "assistant", "content": result["answer"]})
     st.session_state.sources.append(result["sources"])
     st.session_state.oos.append(is_oos)
+
+# ── Export button (rendered last so it contains the latest turn) ──────────────
+export_slot.download_button(
+    "⬇️ Download chat (.md)",
+    data=chat_to_markdown(st.session_state.messages, st.session_state.sources, st.session_state.oos),
+    file_name="cryptquery_chat.md",
+    mime="text/markdown",
+    disabled=not st.session_state.messages,
+    use_container_width=True,
+)
