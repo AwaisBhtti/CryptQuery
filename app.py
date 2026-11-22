@@ -1,6 +1,7 @@
 import streamlit as st
 from rag_engine import RAGEngine, SIMILARITY_THRESHOLD
 import pymupdf
+from quiz_ui import render_quiz
 from datetime import datetime
 from pathlib import Path
 
@@ -60,26 +61,34 @@ if "messages" not in st.session_state:
     st.session_state.messages = []   # {"role": "user"|"assistant", "content": str}
 if "sources" not in st.session_state:
     st.session_state.sources = []    # list[list[dict]] — one entry per assistant turn
+if "quiz" not in st.session_state:
+    st.session_state.quiz = None     # active Quiz Me session (see quiz_ui.py)
 if "oos" not in st.session_state:
     st.session_state.oos = []        # list[bool] — out-of-syllabus flag per assistant turn
 
 # ── Sidebar Controls ──────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("⚙️ Settings")
-    top_k = st.number_input("Top Slides (top_k)", min_value=3, max_value=8, value=5)
-    threshold = st.slider(
-        "Relevance threshold",
-        min_value=0.10, max_value=0.80, value=float(SIMILARITY_THRESHOLD), step=0.01,
-        help="If the best slide's cosine similarity is below this, the question is "
-             "treated as out-of-syllabus and no answer is generated.",
-    )
-    st.markdown("---")
-    export_slot = st.empty()   # filled at the end of the script (includes the newest answer)
-    if st.button("🗑️ Clear Chat", use_container_width=True):
-        st.session_state.messages = []
-        st.session_state.sources = []
-        st.session_state.oos = []
-        st.rerun()
+    view = st.radio("Mode", ["💬 Chat", "📝 Quiz Me"], horizontal=True, key="view")
+    if view == "💬 Chat":
+        top_k = st.number_input("Top Slides (top_k)", min_value=3, max_value=8, value=5)
+        threshold = st.slider(
+            "Relevance threshold",
+            min_value=0.10, max_value=0.80, value=float(SIMILARITY_THRESHOLD), step=0.01,
+            help="If the best slide's cosine similarity is below this, the question is "
+                 "treated as out-of-syllabus and no answer is generated.",
+        )
+        st.markdown("---")
+        export_slot = st.empty()   # filled at the end of the script (includes the newest answer)
+        if st.button("🗑️ Clear Chat", use_container_width=True):
+            st.session_state.messages = []
+            st.session_state.sources = []
+            st.session_state.oos = []
+            st.rerun()
+
+if view == "📝 Quiz Me":
+    render_quiz(engine)
+    st.stop()
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.title("🔒 CryptQuery")
