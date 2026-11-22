@@ -8,12 +8,19 @@ from dotenv import load_dotenv
 from groq import Groq
 
 # Load environment variables (.env file)
-load_dotenv()
+load_dotenv(override=True)
 
 INDEX_FILE = Path("vector_store/faiss_index.bin")
 METADATA_FILE = Path("vector_store/chunks_metadata.json")
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 LLM_MODEL_NAME = "openai/gpt-oss-20b"  # Most lightweight, token-efficient model on Groq
+
+# ── Confidence guardrail (out-of-syllabus detection) ─────────────────────────
+# Refuse when the best DENSE cosine similarity is below this value.
+# 0.35 is only a starting guess: run calibrate_threshold.py and set the result
+# here (or via SIMILARITY_THRESHOLD in .env).
+SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.35"))
+OUT_OF_SCOPE_MESSAGE = "This question does not appear to be covered in the CS3002 curriculum."
 
 class RAGEngine:
     def __init__(self, index_path=INDEX_FILE, metadata_path=METADATA_FILE):
@@ -54,6 +61,23 @@ class RAGEngine:
                 "text": chunk["text"]
             })
         return results
+
+    def is_in_scope(self, chunks: list[dict], threshold: float | None = None) -> tuple[bool, float]:
+        """Guardrail: True if the best dense cosine score clears the threshold.
+        Uses the raw cosine score from FAISS (not any fused/RRF score), so the
+        threshold keeps its meaning if hybrid retrieval is added later."""
+        threshold = SIMILARITY_THRESHOLD if threshold is None else threshold
+        top = max((c["score"] for c in chunks), default=0.0)
+        return top >= threshold, top
+
+    def out_of_scope_result(self, chunks: list[dict], top_score: float, **extra) -> dict:
+        return {
+            "answer": OUT_OF_SCOPE_MESSAGE,
+            "sources": chunks,        # kept so the UI can show what was closest
+            "out_of_scope": True,
+            "top_score": top_score,
+            **extra,
+        }
 
     def condense_query(self, query: str, history: list[dict]) -> str:
         """
@@ -114,9 +138,13 @@ USER QUESTION:
 ANSWER:"""
         return prompt
 
-    def answer_question(self, query: str, top_k: int = 5) -> dict:
-        """End-to-end pipeline: Retrieve -> Format -> Call LLM."""
+    def answer_question(self, query: str, top_k: int = 5, threshold: float | None = None) -> dict:
+        """End-to-end pipeline: Retrieve -> Guardrail -> Format -> Call LLM."""
         retrieved_chunks = self.retrieve(query, top_k=top_k)
+
+        in_scope, top_score = self.is_in_scope(retrieved_chunks, threshold)
+        if not in_scope:
+            return self.out_of_scope_result(retrieved_chunks, top_score)
         
         if not self.groq_client:
             return {
@@ -142,10 +170,13 @@ ANSWER:"""
 
         return {
             "answer": answer_text,
-            "sources": retrieved_chunks
+            "sources": retrieved_chunks,
+            "out_of_scope": False,
+            "top_score": top_score,
         }
 
-    def answer_with_history(self, query: str, history: list[dict], top_k: int = 5) -> dict:
+    def answer_with_history(self, query: str, history: list[dict], top_k: int = 5,
+                            threshold: float | None = None) -> dict:
         """
         Multi-turn pipeline:
           1. Condense follow-up query using history.
@@ -158,6 +189,11 @@ ANSWER:"""
 
         # Step 2: Retrieve
         retrieved_chunks = self.retrieve(search_query, top_k=top_k)
+
+        # Guardrail: skip the LLM entirely for out-of-syllabus questions
+        in_scope, top_score = self.is_in_scope(retrieved_chunks, threshold)
+        if not in_scope:
+            return self.out_of_scope_result(retrieved_chunks, top_score, search_query=search_query)
 
         if not self.groq_client:
             return {
@@ -212,7 +248,9 @@ ANSWER:"""
         return {
             "answer": answer_text,
             "sources": retrieved_chunks,
-            "search_query": search_query
+            "search_query": search_query,
+            "out_of_scope": False,
+            "top_score": top_score,
         }
 
 if __name__ == "__main__":
@@ -233,4 +271,3 @@ if __name__ == "__main__":
     print("\n[RETRIEVED SOURCES]:")
     for s in result["sources"]:
         print(f"- {s['source']} (Slide {s['slide_number']}) [Score: {s['score']:.3f}]")
-

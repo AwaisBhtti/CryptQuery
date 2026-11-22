@@ -1,0 +1,51 @@
+{
+  "in": [
+    "What is a buffer overflow and how does it work?",
+    "How does ASLR help prevent memory exploits?",
+    "How do prepared statements prevent SQL injection?",
+    "What is the difference between stored and reflected XSS?",
+    "What is Role Based Access Control?",
+    "Explain the access control matrix",
+    "What is discretionary access control?",
+    "How does TCP establish and maintain connections?",
+    "How does ransomware work?",
+    "What is the difference between a virus and a worm?",
+    "What is a rootkit?",
+    "What is prompt injection?",
+    "What is a jailbreak attack on an LLM?",
+    "Why are passwords salted before hashing?",
+    "What are the weaknesses of biometric authentication?",
+    "How does Kerberos authentication work?",
+    "What are the ethical issues in information security?",
+    "How does copyright law apply to software?",
+    "What is phishing and how can it be detected?",
+    "How does a digital signature work?",
+    "What is a public key certificate?",
+    "What does a firewall do?"
+  ],
+  "out": [
+    "Who won the FIFA World Cup in 2022?",
+    "What is the capital of France?",
+    "How do I make biryani?",
+    "Explain photosynthesis",
+    "How do I reverse a linked list in Java?",
+    "What is the derivative of x squared?",
+    "Who is the prime minister of Pakistan?",
+    "How does a convolutional neural network work?",
+    "What is the difference between supervised and unsupervised learning?",
+    "Explain Kubernetes pods and deployments",
+    "What is the time complexity of quicksort?",
+    "How does blockchain consensus work?",
+    "What is quantum key distribution?",
+    "Give me a workout plan for beginners",
+    "What are the symptoms of the flu?"
+  ],
+  "hard_out": [
+    "What is a stack canary?",
+    "How does a SYN flood attack work?",
+    "What is the Bell-LaPadula model?",
+    "How does CSRF work and how is it prevented?",
+    "How does multi-factor authentication work?",
+    "What is a botnet?"
+  ]
+}

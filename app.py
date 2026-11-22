@@ -1,5 +1,5 @@
 import streamlit as st
-from rag_engine import RAGEngine
+from rag_engine import RAGEngine, SIMILARITY_THRESHOLD
 import pymupdf
 from pathlib import Path
 
@@ -28,15 +28,24 @@ if "messages" not in st.session_state:
     st.session_state.messages = []   # {"role": "user"|"assistant", "content": str}
 if "sources" not in st.session_state:
     st.session_state.sources = []    # list[list[dict]] — one entry per assistant turn
+if "oos" not in st.session_state:
+    st.session_state.oos = []        # list[bool] — out-of-syllabus flag per assistant turn
 
 # ── Sidebar Controls ──────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("⚙️ Settings")
     top_k = st.number_input("Top Slides (top_k)", min_value=3, max_value=8, value=5)
+    threshold = st.slider(
+        "Relevance threshold",
+        min_value=0.10, max_value=0.80, value=float(SIMILARITY_THRESHOLD), step=0.01,
+        help="If the best slide's cosine similarity is below this, the question is "
+             "treated as out-of-syllabus and no answer is generated.",
+    )
     st.markdown("---")
     if st.button("🗑️ Clear Chat", use_container_width=True):
         st.session_state.messages = []
         st.session_state.sources = []
+        st.session_state.oos = []
         st.rerun()
 
 # ── Header ────────────────────────────────────────────────────────────────────
@@ -49,7 +58,15 @@ assistant_turn_index = 0
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        st.write(msg["content"])
+        is_oos = (
+            msg["role"] == "assistant"
+            and assistant_turn_index < len(st.session_state.oos)
+            and st.session_state.oos[assistant_turn_index]
+        )
+        if is_oos:
+            st.warning(f"⚠️ {msg['content']}")
+        else:
+            st.write(msg["content"])
 
         # If assistant message, show its sources below the answer
         if msg["role"] == "assistant":
@@ -60,7 +77,7 @@ for msg in st.session_state.messages:
             )
             if sources_for_turn:
                 st.markdown("---")
-                st.markdown("**📚 Retrieved Slide Sources**")
+                st.markdown("**🔎 Closest slides (below threshold)**" if is_oos else "**📚 Retrieved Slide Sources**")
                 for s in sources_for_turn:
                     with st.expander(
                         f"📄 {s['source']} — Slide {s['slide_number']} (Score: {s['score']:.3f})"
@@ -84,22 +101,35 @@ if query and query.strip():
     st.session_state.messages.append({"role": "user", "content": query})
 
     # 2. Call RAG engine with history (exclude the current user message)
-    history_for_engine = st.session_state.messages[:-1]
+    # Drop refused (out-of-syllabus) turns so they don't pollute query rewriting
+    prior = st.session_state.messages[:-1]
+    history_for_engine = []
+    for i in range(0, len(prior), 2):
+        turn = i // 2
+        if turn < len(st.session_state.oos) and st.session_state.oos[turn]:
+            continue
+        history_for_engine.extend(prior[i:i + 2])
 
     with st.spinner("Searching lecture slides and generating answer..."):
         result = engine.answer_with_history(
             query=query.strip(),
             history=history_for_engine,
             top_k=int(top_k),
+            threshold=float(threshold),
         )
+    is_oos = result.get("out_of_scope", False)
 
     # 3. Display and store assistant message
     with st.chat_message("assistant"):
-        st.write(result["answer"])
+        if is_oos:
+            st.warning(f"⚠️ {result['answer']}")
+            st.caption(f"Best match score {result['top_score']:.3f} < threshold {threshold:.2f}")
+        else:
+            st.write(result["answer"])
 
         if result.get("sources"):
             st.markdown("---")
-            st.markdown("**📚 Retrieved Slide Sources**")
+            st.markdown("**🔎 Closest slides (below threshold)**" if is_oos else "**📚 Retrieved Slide Sources**")
             for s in result["sources"]:
                 with st.expander(
                     f"📄 {s['source']} — Slide {s['slide_number']} (Score: {s['score']:.3f})"
@@ -114,3 +144,4 @@ if query and query.strip():
 
     st.session_state.messages.append({"role": "assistant", "content": result["answer"]})
     st.session_state.sources.append(result["sources"])
+    st.session_state.oos.append(is_oos)
