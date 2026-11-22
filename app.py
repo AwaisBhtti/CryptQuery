@@ -5,6 +5,16 @@ from pathlib import Path
 
 SLIDES_DIR = Path("IS Slides")
 
+# Example questions shown on an empty chat (all covered by the course slides)
+STARTER_QUESTIONS = [
+    "What is prompt injection?",
+    "How do prepared statements prevent SQL injection?",
+    "What is the difference between stored and reflected XSS?",
+    "What is Role Based Access Control?",
+    "How does Kerberos authentication work?",
+    "How does the TLS handshake work?",
+]
+
 st.set_page_config(page_title="CryptQuery - CS3002 Assistant", page_icon="🔒", layout="centered")
 
 @st.cache_resource
@@ -91,8 +101,19 @@ for msg in st.session_state.messages:
                         st.text(s["text"])
             assistant_turn_index += 1
 
+# ── Starter questions (only on an empty chat) ───────────────────────────────────
+if not st.session_state.messages and not st.session_state.get("pending_query"):
+    st.markdown("**Try asking:**")
+    cols = st.columns(2)
+    for i, q in enumerate(STARTER_QUESTIONS):
+        if cols[i % 2].button(q, key=f"starter_{i}", use_container_width=True):
+            st.session_state.pending_query = q
+            st.rerun()
+
 # ── Chat input ─────────────────────────────────────────────────────────────────
 query = st.chat_input("Ask a question about the course…")
+if not query and st.session_state.get("pending_query"):
+    query = st.session_state.pop("pending_query")
 
 if query and query.strip():
     # 1. Display and store user message
