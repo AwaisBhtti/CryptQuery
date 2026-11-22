@@ -9,7 +9,7 @@ import requests
 from dotenv import load_dotenv
 
 # Load environment variables (.env file)
-load_dotenv()
+load_dotenv(override=True)
 
 SLIDES_DIR = Path("IS Slides")
 OUTPUT_FILE = Path("data/processed_chunks.json")
